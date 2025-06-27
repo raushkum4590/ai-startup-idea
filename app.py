@@ -84,14 +84,29 @@ class StartupIdeaGenerator:
     def __init__(self):
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
         self.model = "mistralai/mistral-small-3.2-24b-instruct:free"
-        # Load API key from environment variable with fallback
-        self.api_key = os.getenv('OPENROUTER_API_KEY') or load_api_key_fallback()
+        
+        # Load API key from multiple sources (priority order):
+        # 1. Streamlit secrets (for cloud deployment)
+        # 2. Environment variable
+        # 3. .env file fallback
+        self.api_key = None
+        
+        # Try Streamlit secrets first (for cloud deployment)
+        try:
+            if hasattr(st, 'secrets') and 'OPENROUTER_API_KEY' in st.secrets:
+                self.api_key = st.secrets['OPENROUTER_API_KEY']
+        except Exception:
+            pass
+        
+        # Fallback to environment variable or .env file
+        if not self.api_key:
+            self.api_key = os.getenv('OPENROUTER_API_KEY') or load_api_key_fallback()
         
         # Debug: Check if API key is loaded (for development only)
         if self.api_key:
             print(f"✅ API Key loaded: {self.api_key[:8]}...")
         else:
-            print("❌ API Key not found in environment variables")
+            print("❌ API Key not found in any source")
             print(f"Current working directory: {os.getcwd()}")
             print(f"Environment file exists: {os.path.exists('.env')}")
             print(f"Environment file exists (absolute): {os.path.exists(current_dir / '.env')}")
@@ -102,8 +117,14 @@ class StartupIdeaGenerator:
         api_key = self.api_key
         
         if not api_key:
-            st.error("⚠️ OpenRouter API key not found! Please check your .env file and restart the application.")
-            st.info("Create a .env file with: OPENROUTER_API_KEY=your_key_here")
+            st.error("⚠️ OpenRouter API key not found!")
+            st.info("""
+            **Setup Instructions:**
+            
+            **Local Development:** Create a .env file with: `OPENROUTER_API_KEY=your_key_here`
+            
+            **Streamlit Cloud:** Add `OPENROUTER_API_KEY = "your_key_here"` to your app secrets
+            """)
             return None
             
         headers = {
@@ -303,12 +324,19 @@ def main():
         if env_api_key:
             st.success("✅ API Key configured and ready!")
         else:
-            st.error("❌ API key not found in .env file")
+            st.error("❌ API key not found")
             st.markdown("""
             **Setup Required:**
+            
+            **For Local Development:**
             1. Create a `.env` file in the project folder
             2. Add: `OPENROUTER_API_KEY=your_key_here`
             3. Restart the application
+            
+            **For Streamlit Cloud:**
+            1. Go to your app settings
+            2. Add to Secrets: `OPENROUTER_API_KEY = "your_key_here"`
+            3. Redeploy the application
             """)
             
             # Debug information
@@ -317,6 +345,20 @@ def main():
                 st.write(f".env file exists: {os.path.exists('.env')}")
                 env_path = pathlib.Path(__file__).parent.absolute() / '.env'
                 st.write(f".env absolute path exists: {env_path.exists()}")
+                
+                # Check Streamlit secrets
+                try:
+                    if hasattr(st, 'secrets'):
+                        st.write("✅ Streamlit secrets available")
+                        if 'OPENROUTER_API_KEY' in st.secrets:
+                            st.write("✅ API key found in Streamlit secrets")
+                        else:
+                            st.write("❌ API key not found in Streamlit secrets")
+                    else:
+                        st.write("❌ Streamlit secrets not available")
+                except Exception as e:
+                    st.write(f"❌ Error checking Streamlit secrets: {e}")
+                
                 if env_path.exists():
                     st.write("✅ .env file found")
                     try:
