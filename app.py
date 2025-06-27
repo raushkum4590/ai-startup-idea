@@ -10,7 +10,24 @@ import pandas as pd
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+import pathlib
+current_dir = pathlib.Path(__file__).parent.absolute()
+env_path = current_dir / '.env'
+load_dotenv(dotenv_path=env_path)
+
+# Alternative method to load API key if dotenv fails
+def load_api_key_fallback():
+    """Fallback method to load API key directly from .env file"""
+    try:
+        env_file = current_dir / '.env'
+        if env_file.exists():
+            with open(env_file, 'r') as f:
+                for line in f:
+                    if line.startswith('OPENROUTER_API_KEY='):
+                        return line.split('=', 1)[1].strip()
+    except Exception as e:
+        print(f"Error reading .env file: {e}")
+    return None
 
 # Page configuration
 st.set_page_config(
@@ -67,8 +84,17 @@ class StartupIdeaGenerator:
     def __init__(self):
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
         self.model = "mistralai/mistral-small-3.2-24b-instruct:free"
-        # Load API key from environment variable
-        self.api_key = os.getenv('OPENROUTER_API_KEY')
+        # Load API key from environment variable with fallback
+        self.api_key = os.getenv('OPENROUTER_API_KEY') or load_api_key_fallback()
+        
+        # Debug: Check if API key is loaded (for development only)
+        if self.api_key:
+            print(f"✅ API Key loaded: {self.api_key[:8]}...")
+        else:
+            print("❌ API Key not found in environment variables")
+            print(f"Current working directory: {os.getcwd()}")
+            print(f"Environment file exists: {os.path.exists('.env')}")
+            print(f"Environment file exists (absolute): {os.path.exists(current_dir / '.env')}")
         
     def call_openrouter_api(self, messages, max_tokens=2000):
         """Call OpenRouter API with the specified model"""
@@ -273,7 +299,7 @@ def main():
         st.header("🔑 Configuration")
         
         # Check if API key is loaded from environment (don't display the key)
-        env_api_key = os.getenv('OPENROUTER_API_KEY')
+        env_api_key = generator.api_key  # Use the generator's loaded key
         if env_api_key:
             st.success("✅ API Key configured and ready!")
         else:
@@ -284,6 +310,24 @@ def main():
             2. Add: `OPENROUTER_API_KEY=your_key_here`
             3. Restart the application
             """)
+            
+            # Debug information
+            with st.expander("🔧 Debug Info"):
+                st.write(f"Current directory: {os.getcwd()}")
+                st.write(f".env file exists: {os.path.exists('.env')}")
+                env_path = pathlib.Path(__file__).parent.absolute() / '.env'
+                st.write(f".env absolute path exists: {env_path.exists()}")
+                if env_path.exists():
+                    st.write("✅ .env file found")
+                    try:
+                        with open(env_path, 'r') as f:
+                            content = f.read()
+                            if 'OPENROUTER_API_KEY=' in content:
+                                st.write("✅ API key variable found in .env")
+                            else:
+                                st.write("❌ API key variable not found in .env")
+                    except Exception as e:
+                        st.write(f"❌ Error reading .env: {e}")
         
         st.markdown("---")
         st.header("💡 Quick Tips")
